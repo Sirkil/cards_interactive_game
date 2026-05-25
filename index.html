@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Color Card Quiz</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
+            overflow: hidden;
+        }
+
+        /* Question Container with Animation */
+        #question-container {
+            text-align: center;
+            opacity: 0;
+            transform: translateY(50px);
+            transition: all 0.5s ease-out;
+        }
+
+        #question-container.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        h1 {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            max-width: 80vw;
+        }
+
+        p.instructions {
+            font-size: 1.5rem;
+            opacity: 0.8;
+        }
+
+        /* Feedback Dialog */
+        #dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            background: white;
+            color: #333;
+            padding: 40px 60px;
+            border-radius: 20px;
+            font-size: 2.5rem;
+            font-weight: bold;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+
+        #dialog.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .correct { color: #28a745 !important; }
+        .wrong { color: #dc3545 !important; }
+
+        /* Hidden elements for camera processing */
+        #webcam, #processor {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <video id="webcam" autoplay playsinline></video>
+    <canvas id="processor" width="320" height="240"></canvas>
+
+    <div id="question-container">
+        <h1 id="question-text">Loading question...</h1>
+        <p class="instructions">Show <span style="color:#28a745; font-weight:bold;">GREEN</span> for Yes/True • Show <span style="color:#dc3545; font-weight:bold;">RED</span> for No/False</p>
+    </div>
+
+    <div id="dialog"></div>
+
+    <script>
+        // --- 1. Game State & 20 Questions ---
+        const questions = [
+            { text: "Is the sky mostly blue?", answer: "yes" }, 
+            { text: "Are tomatoes a type of metal?", answer: "no" }, 
+            { text: "Does 2 + 2 equal 4?", answer: "yes" },
+            { text: "Is water dry?", answer: "no" },
+            { text: "Do fish breathe oxygen?", answer: "yes" },
+            { text: "Is the sun a planet?", answer: "no" },
+            { text: "Can penguins fly in the air?", answer: "no" },
+            { text: "Do bees make honey?", answer: "yes" },
+            { text: "Are human bones made of glass?", answer: "no" },
+            { text: "Is ice frozen water?", answer: "yes" },
+            { text: "Do cats lay eggs?", answer: "no" },
+            { text: "Is the Earth flat?", answer: "no" },
+            { text: "Do trees produce oxygen?", answer: "yes" },
+            { text: "Is fire cold?", answer: "no" },
+            { text: "Are apples a type of fruit?", answer: "yes" },
+            { text: "Do snakes have legs?", answer: "no" },
+            { text: "Is the moon made of cheese?", answer: "no" },
+            { text: "Do humans have two hearts?", answer: "no" },
+            { text: "Is 10 greater than 5?", answer: "yes" },
+            { text: "Do birds have feathers?", answer: "yes" }
+        ];
+
+        let currentQuestionIndex = -1;
+        let isProcessingAnswer = false; 
+
+        const questionEl = document.getElementById('question-text');
+        const containerEl = document.getElementById('question-container');
+        const dialogEl = document.getElementById('dialog');
+
+        function loadQuestion() {
+            // Endless Randomizer: Pick a new question, making sure it isn't the same as the last one
+            let newIndex;
+            do {
+                newIndex = Math.floor(Math.random() * questions.length);
+            } while (newIndex === currentQuestionIndex);
+            
+            currentQuestionIndex = newIndex;
+            
+            // Animation reset
+            containerEl.classList.remove('show');
+            setTimeout(() => {
+                questionEl.innerText = questions[currentQuestionIndex].text;
+                containerEl.classList.add('show');
+                isProcessingAnswer = false; // Unlock camera to read again
+            }, 500);
+        }
+
+        // --- 2. Answer Handling Logic ---
+        function handleAnswer(userAnswer) {
+            if (isProcessingAnswer) return;
+            isProcessingAnswer = true; // Lock answers
+
+            const correctAnswer = questions[currentQuestionIndex].answer;
+            const isCorrect = (userAnswer === correctAnswer);
+
+            if (isCorrect) {
+                dialogEl.innerText = "You answered correct!";
+                dialogEl.className = "show correct";
+                confetti({
+                    particleCount: 150,
+                    spread: 70,
+                    origin: { y: 0.6 }
+                });
+            } else {
+                dialogEl.innerText = "Your answer is wrong!";
+                dialogEl.className = "show wrong";
+            }
+
+            // Hide dialog after 3 seconds and load the next random question
+            setTimeout(() => {
+                dialogEl.classList.remove('show');
+                loadQuestion();
+            }, 3000);
+        }
+
+        // --- 3. Hidden Camera & Color Detection ---
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('processor');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user", width: 320, height: 240 } 
+                });
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    video.play();
+                    detectColor(); // Start the detection loop
+                    loadQuestion(); // Show first question
+                };
+            } catch (err) {
+                console.error("Camera access denied or error:", err);
+                questionEl.innerText = "Camera access required to play.";
+            }
+        }
+
+        function detectColor() {
+            if (!isProcessingAnswer && video.readyState === video.HAVE_ENOUGH_DATA) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = frame.data;
+                
+                let redPixels = 0;
+                let greenPixels = 0;
+
+                for (let i = 0; i < data.length; i += 16) {
+                    let r = data[i];
+                    let g = data[i + 1];
+                    let b = data[i + 2];
+
+                    if (r > 150 && g < 100 && b < 100) {
+                        redPixels++;
+                    }
+                    else if (g > 120 && r < 100 && b < 100) {
+                        greenPixels++;
+                    }
+                }
+
+                // Threshold to trigger an answer
+                const THRESHOLD = 200; 
+
+                if (greenPixels > THRESHOLD) {
+                    handleAnswer("yes");
+                } else if (redPixels > THRESHOLD) {
+                    handleAnswer("no");
+                }
+            }
+            
+            requestAnimationFrame(detectColor);
+        }
+
+        // Initialize
+        startCamera();
+    </script>
+</body>
+</html>
