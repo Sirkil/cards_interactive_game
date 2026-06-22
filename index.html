@@ -115,7 +115,7 @@
         ];
 
         let currentQuestionIndex = -1;
-        let isProcessingAnswer = false; 
+        let isProcessingAnswer = true; 
 
         const questionEl = document.getElementById('question-text');
         const containerEl = document.getElementById('question-container');
@@ -180,8 +180,8 @@
                 video.srcObject = stream;
                 video.onloadedmetadata = () => {
                     video.play();
-                    detectColor(); // Start the detection loop
-                    loadQuestion(); // Show first question
+                    loadQuestion();
+                    detectColor(); // Start the detection loop // Show first question
                 };
             } catch (err) {
                 console.error("Camera access denied or error:", err);
@@ -213,7 +213,7 @@
                 }
 
                 // Threshold to trigger an answer
-                const THRESHOLD = 200; 
+                const THRESHOLD = 1000; 
 
                 if (greenPixels > THRESHOLD) {
                     handleAnswer("yes");
